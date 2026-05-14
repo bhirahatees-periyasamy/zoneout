@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 pub fn domains_path() -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-    PathBuf::from(home).join(".config").join("zoneout").join("domains.json")
+    PathBuf::from(home).join(".zoneout").join("domains.json")
 }
 
 pub fn load() -> Vec<String> {
