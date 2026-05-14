@@ -1,5 +1,6 @@
 mod cli;
 mod daemon;
+mod domains;
 mod hosts;
 mod notify;
 mod state;
@@ -16,6 +17,9 @@ fn main() {
         Command::Enable(args) => cmd_enable(args),
         Command::Disable => cmd_disable(),
         Command::Status => cmd_status(),
+        Command::Add { domain } => cmd_add(&domain),
+        Command::Remove(args) => cmd_remove(args),
+        Command::List => cmd_list(),
         Command::DaemonRun { end_epoch } => daemon::run_daemon(end_epoch),
     }
 }
@@ -44,7 +48,7 @@ fn cmd_enable(args: cli::EnableArgs) {
         std::process::exit(0);
     }
 
-    hosts::add_block().unwrap_or_else(|e| {
+    hosts::add_block(&args.extra_domains).unwrap_or_else(|e| {
         eprintln!("Failed to modify /etc/hosts: {}", e);
         eprintln!("Try: sudo zoneout enable ...");
         std::process::exit(1);
@@ -72,12 +76,10 @@ fn cmd_enable(args: cli::EnableArgs) {
     let local_end = ends_at.with_timezone(&Local);
     let total_secs = duration.as_secs();
     println!("Focus enabled for {}", timer::fmt_duration_secs(total_secs));
-    println!(
-        "  Blocking: claude.ai, chatgpt.com, openai.com, copilot.microsoft.com"
-    );
     println!("  Ends at:  {}", local_end.format("%H:%M:%S"));
     println!("  You'll get a reminder notification every minute.");
     println!("\nRun 'zoneout status' to see a live countdown.");
+    println!("Run 'zoneout list' to see all blocked domains.");
 }
 
 fn cmd_disable() {
@@ -141,5 +143,63 @@ fn cmd_status() {
         }
 
         std::thread::sleep(std::time::Duration::from_secs(1));
+    }
+}
+
+fn cmd_add(domain: &str) {
+    match domains::add(domain) {
+        Ok(true) => println!("Added '{}' to the block list.", domain.trim_start_matches("www.").to_lowercase()),
+        Ok(false) => println!("'{}' is already in the block list.", domain),
+        Err(e) => {
+            eprintln!("Failed to save domain: {}", e);
+            std::process::exit(1);
+        }
+    }
+    println!("It will be blocked the next time you run 'sudo zoneout enable'.");
+}
+
+fn cmd_remove(args: cli::RemoveArgs) {
+    if args.all {
+        domains::remove_all().unwrap_or_else(|e| {
+            eprintln!("Failed to remove domains: {}", e);
+            std::process::exit(1);
+        });
+        println!("All custom domains removed.");
+        return;
+    }
+
+    match args.domain {
+        Some(domain) => match domains::remove(&domain) {
+            Ok(true) => println!("Removed '{}' from the block list.", domain),
+            Ok(false) => println!("'{}' was not in the custom block list.", domain),
+            Err(e) => {
+                eprintln!("Failed to update domains: {}", e);
+                std::process::exit(1);
+            }
+        },
+        None => {
+            eprintln!("Specify a domain to remove, or use --all to remove all custom domains.");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn cmd_list() {
+    let defaults = hosts::BLOCKED_DOMAINS;
+    let custom = domains::load();
+
+    println!("Default domains:");
+    for d in defaults {
+        println!("  {}", d);
+    }
+
+    if custom.is_empty() {
+        println!("\nCustom domains: (none)");
+        println!("\nTip: run 'zoneout add <domain>' to add your own.");
+    } else {
+        println!("\nCustom domains:");
+        for d in &custom {
+            println!("  {}", d);
+        }
     }
 }

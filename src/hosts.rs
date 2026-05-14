@@ -1,3 +1,4 @@
+use crate::domains;
 use std::fs;
 use std::io;
 use std::process::Command;
@@ -6,7 +7,7 @@ pub const HOSTS_PATH: &str = "/etc/hosts";
 const MARKER_BEGIN: &str = "# BEGIN FOCUS BLOCK";
 const MARKER_END: &str = "# END FOCUS BLOCK";
 
-const BLOCKED_DOMAINS: &[&str] = &[
+pub const BLOCKED_DOMAINS: &[&str] = &[
     "claude.ai",
     "api.anthropic.com",
     "anthropic.com",
@@ -22,11 +23,29 @@ pub fn is_blocking() -> bool {
         .unwrap_or(false)
 }
 
-pub fn add_block() -> io::Result<()> {
+pub fn all_blocked_domains() -> Vec<String> {
+    let mut all: Vec<String> = BLOCKED_DOMAINS.iter().map(|s| s.to_string()).collect();
+    for d in domains::load() {
+        if !all.contains(&d) {
+            all.push(d);
+        }
+    }
+    all
+}
+
+pub fn add_block(session_domains: &[String]) -> io::Result<()> {
     let mut content = fs::read_to_string(HOSTS_PATH)?;
 
+    let mut all = all_blocked_domains();
+    for d in session_domains {
+        let d = d.trim_start_matches("www.").to_lowercase();
+        if !all.contains(&d) {
+            all.push(d);
+        }
+    }
+
     let block: String = std::iter::once(MARKER_BEGIN.to_string())
-        .chain(BLOCKED_DOMAINS.iter().map(|d| format!("127.0.0.1 {}", d)))
+        .chain(all.iter().map(|d| format!("127.0.0.1 {}", d)))
         .chain(std::iter::once(MARKER_END.to_string()))
         .collect::<Vec<_>>()
         .join("\n");

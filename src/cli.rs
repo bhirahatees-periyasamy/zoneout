@@ -16,8 +16,24 @@ pub enum Command {
     Disable,
     /// Show a live countdown of the current focus session
     Status,
+    /// Add a custom domain to the block list
+    Add { domain: String },
+    /// Remove a custom domain from the block list
+    Remove(RemoveArgs),
+    /// List all blocked domains (defaults + custom)
+    List,
     #[command(hide = true)]
     DaemonRun { end_epoch: i64 },
+}
+
+#[derive(Args)]
+pub struct RemoveArgs {
+    /// Domain to remove (omit to use --all)
+    pub domain: Option<String>,
+
+    /// Remove all custom domains
+    #[arg(long)]
+    pub all: bool,
 }
 
 #[derive(Args)]
@@ -34,4 +50,8 @@ pub struct EnableArgs {
     /// Minutes to block
     #[arg(short = 'm', long, value_name = "N")]
     pub minutes: Option<u64>,
+
+    /// Extra domains to block for this session only (repeatable: -d a.com -d b.com)
+    #[arg(short = 'd', long = "domain", value_name = "DOMAIN")]
+    pub extra_domains: Vec<String>,
 }
